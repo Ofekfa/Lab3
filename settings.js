@@ -14,6 +14,10 @@ window.COIN_DASH = {
   droneSpeed: 105,
   droneCount: 3,
   coinSoundVolume: 0.15,
+  sfxVolume: 0.15,
+  musicVolume: 0.05,
+  musicBpm: 140,
+  countdownSeconds: 5,
   colors: {
     background: 0x07071a, grid: 0x1c1c4a, hudLine: 0x3cff3c, scanline: 0x000000, panel: 0x000000,
     coin: 0xffd800, coinLight: 0xffffff, coinShade: 0xd86a00,
