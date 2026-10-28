@@ -2,6 +2,7 @@
 
 Collect coins, avoid drones, and survive a 45-second round. Move with arrow keys or WASD;
 press R to restart. This is deliberately small so you can add features during the lab.
+Grab the ice-blue star power-up to freeze all drones for 4 seconds (touching a frozen drone still ends the round).
 
 **Play it here:** https://www.avivz.net/coin-dash/
 

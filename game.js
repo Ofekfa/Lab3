@@ -35,6 +35,7 @@ class CoinDash extends Phaser.Scene {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D,R');
     this.input.keyboard.on('keydown-R', () => this.scene.restart());
+    this.createFreeze();
   }
 
   placeCoin() {
@@ -57,9 +58,67 @@ class CoinDash extends Phaser.Scene {
       - Number(this.cursors.up.isDown || this.keys.W.isDown);
     const direction = new Phaser.Math.Vector2(dx, dy).normalize().scale(COIN_DASH.playerSpeed);
     this.player.body.setVelocity(direction.x, direction.y);
+    this.updateFreeze();
     const seconds = Math.max(0, Math.ceil((this.deadline - this.time.now) / 1000));
     this.hud.setText(`Coins: ${this.score}                       Time: ${seconds}s`);
     if (seconds === 0) this.finish('Time is up!');
+  }
+
+  createFreeze() {
+    const f = COIN_DASH.powerUps.freeze;
+    this.freezeUntil = 0;
+    this.freezeSaved = null;
+    this.freezePickupUntil = 0;
+    this.nextFreezeAt = this.time.now + f.spawnEvery * 1000;
+    this.freezePickup = this.add.star(0, 0, 6, 5, 11, f.color).setVisible(false);
+    this.physics.add.existing(this.freezePickup);
+    this.freezePickup.body.enable = false;
+    this.freezeText = this.add.text(610, 12, '', { font: '16px monospace', color: '#bde0fe' });
+    this.physics.add.overlap(this.player, this.freezePickup, () => this.collectFreeze());
+  }
+
+  spawnFreeze() {
+    const c = COIN_DASH;
+    let x, y;
+    do {
+      x = Phaser.Math.Between(25, c.width - 25);
+      y = Phaser.Math.Between(70, c.height - 25);
+    } while (Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y) < 60);
+    this.freezePickup.setPosition(x, y).setVisible(true);
+    this.freezePickup.body.enable = true;
+    this.freezePickup.body.reset(x, y);
+    this.freezePickupUntil = this.time.now + c.powerUps.freeze.lifetime * 1000;
+  }
+
+  hideFreeze() {
+    this.freezePickup.setVisible(false);
+    this.freezePickup.body.enable = false;
+    this.nextFreezeAt = this.time.now + COIN_DASH.powerUps.freeze.spawnEvery * 1000;
+  }
+
+  collectFreeze() {
+    if (this.finished || !this.freezePickup.visible) return;
+    this.hideFreeze();
+    this.freezeUntil = this.time.now + COIN_DASH.powerUps.freeze.duration * 1000;
+    if (this.freezeSaved) return;
+    this.freezeSaved = this.drones.getChildren().map(d => {
+      const saved = { drone: d, vx: d.body.velocity.x, vy: d.body.velocity.y, color: d.fillColor };
+      d.body.setVelocity(0, 0);
+      d.setFillStyle(COIN_DASH.powerUps.freeze.color);
+      return saved;
+    });
+  }
+
+  updateFreeze() {
+    if (this.finished) return;
+    const now = this.time.now;
+    if (this.freezePickup.visible && now >= this.freezePickupUntil) this.hideFreeze();
+    else if (!this.freezePickup.visible && now >= this.nextFreezeAt) this.spawnFreeze();
+    if (this.freezeSaved && now >= this.freezeUntil) {
+      this.freezeSaved.forEach(s => { s.drone.body.setVelocity(s.vx, s.vy); s.drone.setFillStyle(s.color); });
+      this.freezeSaved = null;
+    }
+    this.freezeText.setText(this.freezeSaved ? `FREEZE ${Math.ceil((this.freezeUntil - now) / 1000)}s` : '');
   }
 
   finish(reason) {
