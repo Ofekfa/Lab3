@@ -136,7 +136,8 @@ class CoinDash extends Phaser.Scene {
     this.input.keyboard.on('keydown-C', () => this.finished && this.scene.start('CharacterSelect'));
     this.input.keyboard.on('keydown-P', () => this.togglePause());
     this.pauseText = this.add.text(c.width / 2, (c.height + 44) / 2, 'PAUSED\nPRESS P TO RESUME',
-      { font: `bold 28px ${FONT}`, color: c.colors.hudAlt, align: 'center', lineSpacing: 12 }
+      { font: `bold 28px ${FONT}`, color: c.colors.hudAlt, align: 'center', lineSpacing: 12,
+        backgroundColor: 'rgba(0, 0, 0, 0.85)', padding: { x: 28, y: 18 } }
     ).setOrigin(0.5).setDepth(20).setVisible(false);
     this.createSpeed();
     this.createFreeze();
