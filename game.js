@@ -30,6 +30,11 @@ function makeCharacterTextures(scene) {
     drawSprite(scene, `player-${ch.id}`, CHARACTER_SPRITES[ch.id], { G: ch.color, K: ch.dark, E: 0xffffff }));
 }
 
+// Absolute this.time.now timestamps on CoinDash that togglePause shifts when the game resumes.
+const PAUSABLE_TIMERS = ['deadline', 'invulnerableUntil', 'lastCoinAt', 'goldenUntil', 'nextGoldenAt',
+  'speedUntil', 'speedPickupUntil', 'speedNextSpawn', 'shieldUntil', 'shieldPickupUntil', 'nextShieldAt',
+  'freezeUntil', 'freezePickupUntil', 'nextFreezeAt'];
+
 class CharacterSelect extends Phaser.Scene {
   constructor() { super('CharacterSelect'); }
 
@@ -96,6 +101,7 @@ class CoinDash extends Phaser.Scene {
     this.coinsCollected = 0;
     this.level = 1;
     this.droneSpeed = c.droneSpeed;
+    this.paused = false;
     this.deadline = this.time.now + c.roundSeconds * 1000;
     this.physics.world.setBounds(0, 44, c.width, c.height - 44);
     this.add.grid(c.width / 2, c.height / 2, c.width, c.height, 40, 40,
@@ -125,9 +131,13 @@ class CoinDash extends Phaser.Scene {
     this.createShield();
     this.physics.add.overlap(this.player, this.drones, () => this.hitPlayer());
     this.cursors = this.input.keyboard.createCursorKeys();
-    this.keys = this.input.keyboard.addKeys('W,A,S,D,R');
+    this.keys = this.input.keyboard.addKeys('W,A,S,D,R,P');
     this.input.keyboard.on('keydown-R', () => this.scene.restart());
     this.input.keyboard.on('keydown-C', () => this.finished && this.scene.start('CharacterSelect'));
+    this.input.keyboard.on('keydown-P', () => this.togglePause());
+    this.pauseText = this.add.text(c.width / 2, (c.height + 44) / 2, 'PAUSED\nPRESS P TO RESUME',
+      { font: `bold 28px ${FONT}`, color: c.colors.hudAlt, align: 'center', lineSpacing: 12 }
+    ).setOrigin(0.5).setDepth(20).setVisible(false);
     this.createSpeed();
     this.createFreeze();
     this.createGolden();
@@ -159,7 +169,7 @@ class CoinDash extends Phaser.Scene {
   collectCoin() {
     if (this.finished) return;
     const c = COIN_DASH, now = this.time.now;
-    // Coins grabbed in quick succession build a multiplier; a pause resets it.
+    // Coins grabbed in quick succession build a multiplier; a longer gap resets it.
     this.combo = now - this.lastCoinAt <= c.combo.window * 1000 ? Math.min(this.combo + 1, c.combo.max) : 1;
     this.lastCoinAt = now;
     this.score += this.combo;
@@ -315,6 +325,23 @@ class CoinDash extends Phaser.Scene {
     osc.stop(t + 0.25);
   }
 
+  togglePause() {
+    if (this.finished) return;
+    this.paused = !this.paused;
+    if (this.paused) {
+      this.pausedAt = this.time.now;
+      this.physics.pause();
+      this.tweens.pauseAll();
+    } else {
+      // time.now keeps running while paused, so push every timestamp-based timer back by the pause.
+      const d = this.time.now - this.pausedAt;
+      for (const k of PAUSABLE_TIMERS) if (Number.isFinite(this[k]) && this[k] > 0) this[k] += d;
+      this.physics.resume();
+      this.tweens.resumeAll();
+    }
+    this.pauseText.setVisible(this.paused);
+  }
+
   placeCoin() {
     const c = COIN_DASH;
     // Avoid spawning the next coin directly underneath the player.
@@ -328,7 +355,7 @@ class CoinDash extends Phaser.Scene {
   }
 
   update() {
-    if (this.finished) return;
+    if (this.finished || this.paused) return;
     const dx = Number(this.cursors.right.isDown || this.keys.D.isDown)
       - Number(this.cursors.left.isDown || this.keys.A.isDown);
     const dy = Number(this.cursors.down.isDown || this.keys.S.isDown)

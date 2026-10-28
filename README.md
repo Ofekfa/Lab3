@@ -1,11 +1,11 @@
 # Coin Dash — Lab 3 starter
 
 Collect coins, avoid drones, and survive a 45-second round. Move with arrow keys or WASD;
-press R to restart. This is deliberately small so you can add features during the lab.
+press P to pause and R to restart. This is deliberately small so you can add features during the lab.
 Before each round, choose one of four characters (BLIP, ROBO, WHISKERS, GOO) with the arrow keys and
 Enter, or by clicking; R replays with the same character and C on the game-over screen picks again.
 You have 3 lives: a drone hit costs one and gives 1.5 seconds of flashing invulnerability.
-Coins grabbed within 2 seconds of each other build a combo (x2, then x3 points); pausing resets it.
+Coins grabbed within 2 seconds of each other build a combo (x2, then x3 points); a longer gap resets it.
 A big blinking golden coin appears every few seconds and is worth 5 points, but vanishes after 3 seconds.
 Every 10 coins the level goes up: drones get 15% faster and a new drone joins (up to 6).
 The game-over screen shows the top 5 scores (saved in your browser) and flashes NEW HIGH SCORE! when you beat the best.
