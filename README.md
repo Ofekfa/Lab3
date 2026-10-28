@@ -12,9 +12,12 @@ The game-over screen shows the top 5 scores (saved in your browser) and flashes 
 Grab the cyan diamond for a 6-second shield that makes you immune to drones.
 Grab the green triangle power-up for a 5-second speed boost (x1.7).
 Grab the ice-blue star power-up to freeze all drones for 4 seconds (touching a frozen drone still ends the round).
-Collecting a coin plays a short chime, synthesized with the Web Audio API.
+Sound is synthesized with the Web Audio API: a background music loop during the round, a chime for each coin,
+a sound for each power-up, a hit sound when you lose a life, a death sound on the last one, and a beep each
+second in the last 5 seconds.
 Pickups burst into pixel sparks with a light screen shake, and the chime climbs a musical scale while your coin streak lasts (a drone hit flashes red and resets it).
 The best of those scores is shown as HI in the top bar.
+Active power-ups show shrinking timer bars above the player, and a small bar under the combo shows how long it lasts.
 
 **Play it here:** https://www.avivz.net/coin-dash/
 
@@ -56,7 +59,7 @@ laptops' JSON files together and save the combined HTML. Use the same time windo
 - `vendor/phaser-3.90.0.min.js`: the pinned Phaser runtime, byte for byte the file published at
   `https://cdn.jsdelivr.net/npm/phaser@3.90.0/dist/phaser.min.js`; `vendor/LICENSE.phaser.txt` is its MIT licence.
 
-The game draws its own shapes; there are no image or audio assets (the coin chime is synthesized in code). The authored files are under the
+The game draws its own shapes; there are no image or audio assets (music and sound effects are synthesized in code). The authored files are under the
 MIT licence in LICENSE.txt. Phaser documentation:
 https://docs.phaser.io/phaser/getting-started/making-your-first-phaser-game
 

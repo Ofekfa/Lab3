@@ -14,6 +14,14 @@ const CHARACTER_SPRITES = {
   goo: [3, '...GG...', '..GGGG..', '.GGGGGG.', 'GGEGGEGG', 'GGKGGKGG', 'GGGGGGGG', 'GGKKKKGG', 'G.GG.GG.']
 };
 const FONT = '"Courier New", Courier, monospace';
+// Background loop as MIDI notes, one per eighth note (Am F C G); 0 is a rest.
+const MUSIC = {
+  bass: [45, 57, 45, 57, 45, 57, 45, 57, 41, 53, 41, 53, 41, 53, 41, 53,
+    48, 60, 48, 60, 48, 60, 48, 60, 43, 55, 43, 55, 43, 55, 47, 55],
+  lead: [69, 0, 72, 76, 0, 76, 74, 72, 69, 0, 72, 77, 0, 77, 76, 74,
+    72, 0, 76, 79, 0, 79, 77, 76, 74, 0, 71, 74, 79, 0, 74, 71]
+};
+const midiHz = n => 440 * 2 ** ((n - 69) / 12);
 
 function drawSprite(scene, key, [px, ...rows], pal) {
   if (scene.textures.exists(key)) return;
@@ -102,6 +110,7 @@ class CoinDash extends Phaser.Scene {
     this.level = 1;
     this.droneSpeed = c.droneSpeed;
     this.paused = false;
+    this.lastSecond = null;
     this.deadline = this.time.now + c.roundSeconds * 1000;
     this.physics.world.setBounds(0, 44, c.width, c.height - 44);
     this.add.grid(c.width / 2, c.height / 2, c.width, c.height, 40, 40,
@@ -143,6 +152,36 @@ class CoinDash extends Phaser.Scene {
     this.createFreeze();
     this.createGolden();
     this.createJuice();
+    this.startMusic();
+    this.events.once('shutdown', () => this.stopMusic());
+    this.powerBars = this.add.graphics().setDepth(5);
+    this.comboBar = this.add.graphics();
+  }
+
+  updateComboBar() {
+    // Shrinking bar under the HUD's xN showing how long the combo window has left.
+    const left = this.lastCoinAt + COIN_DASH.combo.window * 1000 - this.time.now;
+    this.comboBar.clear();
+    if (!this.comboActive()) return;
+    const w = 24, x = this.hud.x + this.hud.width - w;
+    this.comboBar.fillStyle(COIN_DASH.colors.drone).fillRect(x, 36, w * left / (COIN_DASH.combo.window * 1000), 3);
+  }
+
+  updatePowerBars() {
+    // One bar per active power-up above the player, shrinking as its time runs out.
+    const p = COIN_DASH.powerUps, now = this.time.now;
+    const active = [
+      [this.shieldUntil, p.shield],
+      [this.speedUntil, p.speed],
+      [this.freezeSaved && this.freezeUntil, p.freeze]
+    ].filter(([until]) => until > now);
+    const w = 30, h = 4, x = this.player.x - w / 2;
+    this.powerBars.clear();
+    active.forEach(([until, s], i) => {
+      const y = this.player.y - 22 - i * (h + 2);
+      this.powerBars.fillStyle(COIN_DASH.colors.panel, 0.7).fillRect(x - 1, y - 1, w + 2, h + 2);
+      this.powerBars.fillStyle(s.color).fillRect(x, y, w * (until - now) / (s.duration * 1000), h);
+    });
   }
 
   addDrone(x, y, angle) {
@@ -211,7 +250,11 @@ class CoinDash extends Phaser.Scene {
     this.lives--;
     this.livesText.setText('♥'.repeat(this.lives));
     this.juiceHit();
-    if (this.lives <= 0) return this.finish('A DRONE CAUGHT YOU!');
+    if (this.lives <= 0) {
+      this.synth({ type: 'sawtooth', steps: [[0, 494], [0.1, 370], [0.2, 294]], slide: 60, length: 0.8 });
+      return this.finish('A DRONE CAUGHT YOU!');
+    }
+    this.synth({ type: 'sawtooth', steps: [[0, 330]], slide: 110, length: 0.25 });
     this.invulnerableUntil = now + COIN_DASH.hitInvulnerable * 1000;
     this.tweens.add({ targets: this.player, alpha: 0.2, duration: 100, yoyo: true,
       repeat: Math.floor(COIN_DASH.hitInvulnerable * 5) - 1, onComplete: () => this.player.setAlpha(1) });
@@ -293,6 +336,7 @@ class CoinDash extends Phaser.Scene {
     this.hideSpeedPickup();
     this.speedUntil = this.time.now + COIN_DASH.powerUps.speed.duration * 1000;
     this.player.setTint(COIN_DASH.powerUps.speed.color);
+    this.synth({ steps: [[0, 523], [0.05, 659], [0.1, 784], [0.15, 1047]], length: 0.25 });
   }
 
   updateSpeed() {
@@ -335,24 +379,67 @@ class CoinDash extends Phaser.Scene {
     this.streak = 0;
   }
 
-  playCoinSound(semitones = 0) {
-    // Synthesized two-note chime, so the game still ships without audio assets.
+  // All sounds are synthesized, so the game still ships without audio assets. One oscillator under a
+  // decaying envelope: steps are [offset s, Hz], and slide glides from the last step to that Hz.
+  synth({ type = 'square', steps, length, slide, volume = COIN_DASH.sfxVolume, at, out }) {
     const ctx = this.sound.context;
     if (!ctx) return;
-    const t = ctx.currentTime;
+    const t = at ?? ctx.currentTime;
     const gain = ctx.createGain();
     gain.gain.setValueAtTime(0.0001, t);
-    gain.gain.exponentialRampToValueAtTime(COIN_DASH.coinSoundVolume, t + 0.01);
-    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
-    gain.connect(ctx.destination);
+    gain.gain.exponentialRampToValueAtTime(volume, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + length);
+    gain.connect(out ?? ctx.destination);
     const osc = ctx.createOscillator();
-    osc.type = 'square';
-    const k = 2 ** (semitones / 12);
-    osc.frequency.setValueAtTime(988 * k, t);
-    osc.frequency.setValueAtTime(1319 * k, t + 0.07);
+    osc.type = type;
+    steps.forEach(([offset, hz]) => osc.frequency.setValueAtTime(hz, t + offset));
+    if (slide) osc.frequency.exponentialRampToValueAtTime(slide, t + length);
     osc.connect(gain);
     osc.start(t);
-    osc.stop(t + 0.25);
+    osc.stop(t + length);
+  }
+
+  playCoinSound(semitones = 0) {
+    const k = 2 ** (semitones / 12);
+    this.synth({ steps: [[0, 988 * k], [0.07, 1319 * k]], length: 0.25, volume: COIN_DASH.coinSoundVolume });
+  }
+
+  playCountdownBeep(seconds) {
+    if (seconds > 0) this.synth({ steps: [[0, 880]], length: 0.12 });
+    else this.synth({ steps: [[0, 1760]], length: 0.5 });
+  }
+
+  startMusic() {
+    const ctx = this.sound.context;
+    this.music = null;
+    if (!ctx) return;
+    const gain = ctx.createGain();
+    gain.gain.value = COIN_DASH.musicVolume;
+    gain.connect(ctx.destination);
+    this.music = { gain, step: 0, next: ctx.currentTime + 0.05 };
+  }
+
+  updateMusic() {
+    if (!this.music) return;
+    // Schedule slightly ahead on the audio clock so the loop keeps time even when frames stutter;
+    // nothing is scheduled while paused, so the music stops and resumes with the game.
+    const ctx = this.sound.context, m = this.music, eighth = 30 / COIN_DASH.musicBpm;
+    if (m.next < ctx.currentTime) m.next = ctx.currentTime + 0.05; // resync after a pause or audio unlock
+    while (m.next < ctx.currentTime + 0.15) {
+      const i = m.step++ % MUSIC.bass.length;
+      this.synth({ type: 'triangle', steps: [[0, midiHz(MUSIC.bass[i])]], length: eighth * 0.9,
+        volume: 1, at: m.next, out: m.gain });
+      if (MUSIC.lead[i]) {
+        this.synth({ steps: [[0, midiHz(MUSIC.lead[i])]], length: eighth * 0.8, volume: 0.35, at: m.next, out: m.gain });
+      }
+      m.next += eighth;
+    }
+  }
+
+  stopMusic() {
+    if (!this.music) return;
+    this.music.gain.gain.setTargetAtTime(0, this.sound.context.currentTime, 0.05);
+    this.music = null;
   }
 
   togglePause() {
@@ -397,11 +484,18 @@ class CoinDash extends Phaser.Scene {
     this.updateSpeed();
     this.updateFreeze();
     this.updateGolden();
+    this.updateMusic();
     const seconds = Math.max(0, Math.ceil((this.deadline - this.time.now) / 1000));
+    if (seconds !== this.lastSecond) {
+      this.lastSecond = seconds;
+      if (seconds <= COIN_DASH.countdownSeconds) this.playCountdownBeep(seconds);
+    }
     this.hud.setText(`SCORE ${String(this.score).padStart(4, '0')}${this.comboActive() ? ` x${this.combo}` : ''}`);
     this.timer.setText(`TIME ${String(seconds).padStart(2, '0')}`);
     if (seconds === 0) this.finish('TIME IS UP!');
     this.updateShield();
+    this.updateComboBar();
+    this.updatePowerBars();
   }
 
   createShield() {
@@ -439,6 +533,7 @@ class CoinDash extends Phaser.Scene {
     if (this.finished || !this.shieldPickup.visible) return;
     this.hideShieldPickup();
     this.shieldUntil = this.time.now + COIN_DASH.powerUps.shield.duration * 1000;
+    this.synth({ type: 'triangle', steps: [[0, 300]], slide: 900, length: 0.3 });
   }
 
   shieldActive() { return this.time.now < this.shieldUntil; }
@@ -490,6 +585,7 @@ class CoinDash extends Phaser.Scene {
     if (this.finished || !this.freezePickup.visible) return;
     this.hideFreeze();
     this.freezeUntil = this.time.now + COIN_DASH.powerUps.freeze.duration * 1000;
+    this.synth({ type: 'sine', steps: [[0, 2093], [0.06, 1568], [0.12, 1319], [0.18, 1047]], length: 0.4 });
     if (this.freezeSaved) return;
     this.freezeSaved = this.drones.getChildren().map(d => {
       const saved = { drone: d, vx: d.body.velocity.x, vy: d.body.velocity.y };
@@ -532,9 +628,11 @@ class CoinDash extends Phaser.Scene {
     if (this.finished) return;
     this.finished = true;
     this.physics.pause();
+    this.stopMusic();
     // Power-up pickups and timers would otherwise stay frozen on top of the end screen.
     [this.shieldPickup, this.speedPickup, this.freezePickup, this.shieldRing, this.golden].forEach(o => o.setVisible(false));
     [this.shieldText, this.speedText, this.freezeText].forEach(t => t.setText(''));
+    [this.powerBars, this.comboBar].forEach(g => g.clear());
     const { scores, entry, isNew } = this.saveHighScore();
     const c = COIN_DASH, cx = c.width / 2, cy = (c.height + 44) / 2;
     const style = (size, color) => ({ font: `bold ${size}px ${FONT}`, color });
