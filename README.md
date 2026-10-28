@@ -13,6 +13,7 @@ Grab the cyan diamond for a 6-second shield that makes you immune to drones.
 Grab the green triangle power-up for a 5-second speed boost (x1.7).
 Grab the ice-blue star power-up to freeze all drones for 4 seconds (touching a frozen drone still ends the round).
 Collecting a coin plays a short chime, synthesized with the Web Audio API.
+Pickups burst into pixel sparks with a light screen shake, and the chime climbs a musical scale while your coin streak lasts (a drone hit flashes red and resets it).
 The best of those scores is shown as HI in the top bar.
 
 **Play it here:** https://www.avivz.net/coin-dash/

@@ -142,6 +142,7 @@ class CoinDash extends Phaser.Scene {
     this.createSpeed();
     this.createFreeze();
     this.createGolden();
+    this.createJuice();
   }
 
   addDrone(x, y, angle) {
@@ -172,9 +173,10 @@ class CoinDash extends Phaser.Scene {
     const c = COIN_DASH, now = this.time.now;
     // Coins grabbed in quick succession build a multiplier; a longer gap resets it.
     this.combo = now - this.lastCoinAt <= c.combo.window * 1000 ? Math.min(this.combo + 1, c.combo.max) : 1;
+    this.streak = this.combo === 1 ? 1 : this.streak + 1;
     this.lastCoinAt = now;
     this.score += this.combo;
-    this.playCoinSound();
+    this.juiceCoin(this.coin.x, this.coin.y, c.juice.sparks, c.colors.coin);
     this.popup(this.coin.x, this.coin.y, `+${this.combo}`, c.colors.hudAlt);
     this.coinsCollected++;
     if (this.coinsCollected % c.difficulty.coinsPerLevel === 0) this.levelUp();
@@ -208,6 +210,7 @@ class CoinDash extends Phaser.Scene {
     if (this.finished || this.shieldActive() || now < this.invulnerableUntil) return;
     this.lives--;
     this.livesText.setText('♥'.repeat(this.lives));
+    this.juiceHit();
     if (this.lives <= 0) return this.finish('A DRONE CAUGHT YOU!');
     this.invulnerableUntil = now + COIN_DASH.hitInvulnerable * 1000;
     this.tweens.add({ targets: this.player, alpha: 0.2, duration: 100, yoyo: true,
@@ -243,6 +246,7 @@ class CoinDash extends Phaser.Scene {
     if (this.finished || !this.golden.visible) return;
     const value = COIN_DASH.goldenCoin.value;
     this.score += value;
+    this.juiceCoin(this.golden.x, this.golden.y, COIN_DASH.juice.goldenSparks, COIN_DASH.colors.coinLight, 12);
     this.popup(this.golden.x, this.golden.y, `+${value}`, COIN_DASH.colors.hudAlt, 24);
     this.hideGolden();
   }
@@ -307,7 +311,31 @@ class CoinDash extends Phaser.Scene {
     return COIN_DASH.playerSpeed * (this.time.now < this.speedUntil ? s.multiplier : 1);
   }
 
-  playCoinSound() {
+  createJuice() {
+    this.streak = 0;
+    if (!this.textures.exists('spark')) this.make.graphics({ add: false }).fillStyle(0xffffff).fillRect(0, 0, 4, 4)
+      .generateTexture('spark', 4, 4).destroy();
+    const j = COIN_DASH.juice;
+    this.sparks = this.add.particles(0, 0, 'spark', { emitting: false, lifespan: 420, gravityY: 300,
+      speed: { min: j.sparkSpeed * 0.4, max: j.sparkSpeed }, scale: { start: 1.5, end: 0 } }).setDepth(6);
+  }
+
+  // Coin pickup feedback: a pixel burst, a light shake, a squash on the player and a chime that rises with the streak.
+  juiceCoin(x, y, count, tint, extraSteps = 0) {
+    const j = COIN_DASH.juice, steps = j.pitchSteps;
+    this.sparks.setParticleTint(tint).explode(count, x, y);
+    this.cameras.main.shake(j.shakeMs, j.shake * Math.min(this.streak || 1, 4));
+    this.tweens.add({ targets: this.player, scale: j.punch, duration: 60, yoyo: true, onComplete: () => this.player.setScale(1) });
+    this.playCoinSound(steps[Math.min(Math.max(this.streak, 1) - 1, steps.length - 1)] + extraSteps);
+  }
+
+  juiceHit() {
+    const j = COIN_DASH.juice;
+    this.cameras.main.shake(j.hitShakeMs, j.hitShake).flash(150, 255, 60, 110);
+    this.streak = 0;
+  }
+
+  playCoinSound(semitones = 0) {
     // Synthesized two-note chime, so the game still ships without audio assets.
     const ctx = this.sound.context;
     if (!ctx) return;
@@ -319,8 +347,9 @@ class CoinDash extends Phaser.Scene {
     gain.connect(ctx.destination);
     const osc = ctx.createOscillator();
     osc.type = 'square';
-    osc.frequency.setValueAtTime(988, t);
-    osc.frequency.setValueAtTime(1319, t + 0.07);
+    const k = 2 ** (semitones / 12);
+    osc.frequency.setValueAtTime(988 * k, t);
+    osc.frequency.setValueAtTime(1319 * k, t + 0.07);
     osc.connect(gain);
     osc.start(t);
     osc.stop(t + 0.25);
@@ -333,12 +362,14 @@ class CoinDash extends Phaser.Scene {
       this.pausedAt = this.time.now;
       this.physics.pause();
       this.tweens.pauseAll();
+      this.sparks.pause();
     } else {
       // time.now keeps running while paused, so push every timestamp-based timer back by the pause.
       const d = this.time.now - this.pausedAt;
       for (const k of PAUSABLE_TIMERS) if (Number.isFinite(this[k]) && this[k] > 0) this[k] += d;
       this.physics.resume();
       this.tweens.resumeAll();
+      this.sparks.resume();
     }
     this.pauseText.setVisible(this.paused);
   }
