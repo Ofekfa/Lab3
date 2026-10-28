@@ -31,7 +31,8 @@ class CoinDash extends Phaser.Scene {
       this.score++;
       this.placeCoin();
     });
-    this.physics.add.overlap(this.player, this.drones, () => this.finish('A drone caught you!'));
+    this.createShield();
+    this.physics.add.overlap(this.player, this.drones, () => this.shieldActive() || this.finish('A drone caught you!'));
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D,R');
     this.input.keyboard.on('keydown-R', () => this.scene.restart());
@@ -60,6 +61,57 @@ class CoinDash extends Phaser.Scene {
     const seconds = Math.max(0, Math.ceil((this.deadline - this.time.now) / 1000));
     this.hud.setText(`Coins: ${this.score}                       Time: ${seconds}s`);
     if (seconds === 0) this.finish('Time is up!');
+    this.updateShield();
+  }
+
+  createShield() {
+    const s = COIN_DASH.powerUps.shield;
+    this.shieldUntil = 0;
+    this.nextShieldAt = this.time.now + s.spawnEvery * 1000;
+    this.shieldPickup = this.add.rectangle(0, 0, 18, 18, s.color).setAngle(45).setVisible(false);
+    this.physics.add.existing(this.shieldPickup);
+    this.shieldPickup.body.enable = false;
+    this.shieldRing = this.add.circle(0, 0, 22).setStrokeStyle(3, s.color).setVisible(false);
+    this.shieldText = this.add.text(330, 12, '', { font: '16px monospace', color: '#4cc9f0' });
+    this.physics.add.overlap(this.player, this.shieldPickup, () => this.collectShield());
+  }
+
+  spawnShield() {
+    const c = COIN_DASH;
+    let x, y;
+    do {
+      x = Phaser.Math.Between(25, c.width - 25);
+      y = Phaser.Math.Between(70, c.height - 25);
+    } while (Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y) < 60);
+    this.shieldPickup.setPosition(x, y).setVisible(true);
+    this.shieldPickup.body.enable = true;
+    this.shieldPickup.body.reset(x, y);
+    this.shieldPickupUntil = this.time.now + c.powerUps.shield.lifetime * 1000;
+  }
+
+  hideShieldPickup() {
+    this.shieldPickup.setVisible(false);
+    this.shieldPickup.body.enable = false;
+    this.nextShieldAt = this.time.now + COIN_DASH.powerUps.shield.spawnEvery * 1000;
+  }
+
+  collectShield() {
+    if (this.finished || !this.shieldPickup.visible) return;
+    this.hideShieldPickup();
+    this.shieldUntil = this.time.now + COIN_DASH.powerUps.shield.duration * 1000;
+  }
+
+  shieldActive() { return this.time.now < this.shieldUntil; }
+
+  updateShield() {
+    if (this.finished) return;
+    const now = this.time.now;
+    if (this.shieldPickup.visible && now >= this.shieldPickupUntil) this.hideShieldPickup();
+    else if (!this.shieldPickup.visible && now >= this.nextShieldAt) this.spawnShield();
+    const left = this.shieldUntil - now;
+    this.shieldRing.setPosition(this.player.x, this.player.y)
+      .setVisible(left > 0 && (left > 1500 || Math.floor(left / 125) % 2 === 0));
+    this.shieldText.setText(left > 0 ? `SHIELD ${Math.ceil(left / 1000)}s` : '');
   }
 
   finish(reason) {
