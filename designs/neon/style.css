@@ -1,0 +1,11 @@
+* { box-sizing: border-box; }
+body { margin: 0; min-height: 100vh; color: #f3e8ff; font: 17px/1.5 system-ui, sans-serif;
+  background: linear-gradient(#0d0221, #2a0845 60%, #0d0221); }
+main { max-width: 850px; margin: 30px auto; padding: 0 20px; }
+header > p:first-child { color: #2de2e6; font: 12px monospace; letter-spacing: .3em; text-shadow: 0 0 8px #2de2e6; }
+h1 { margin: 0; font: italic 800 48px/1.1 system-ui, sans-serif; letter-spacing: .06em; text-transform: uppercase;
+  color: #ffe3fb; text-shadow: 0 0 6px #ff2bd6, 0 0 18px #ff2bd6, 0 0 36px #a020f0; }
+strong { color: #2de2e6; text-shadow: 0 0 6px #2de2e6; }
+#game { border: 2px solid #ff2bd6; border-radius: 12px; overflow: hidden;
+  box-shadow: 0 0 12px #ff2bd6, 0 0 32px rgba(45, 226, 230, .35); }
+canvas { display: block; }
