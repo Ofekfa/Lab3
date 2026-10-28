@@ -3,6 +3,7 @@
 Collect coins, avoid drones, and survive a 45-second round. Move with arrow keys or WASD;
 press R to restart. This is deliberately small so you can add features during the lab.
 Grab the cyan diamond for a 6-second shield that makes you immune to drones.
+Grab the green triangle power-up for a 5-second speed boost (x1.7).
 
 **Play it here:** https://www.avivz.net/coin-dash/
 

@@ -36,6 +36,61 @@ class CoinDash extends Phaser.Scene {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D,R');
     this.input.keyboard.on('keydown-R', () => this.scene.restart());
+    this.createSpeed();
+  }
+
+  createSpeed() {
+    const s = COIN_DASH.powerUps.speed;
+    this.speedUntil = 0;
+    this.speedPickupUntil = 0;
+    this.speedNextSpawn = this.time.now + s.spawnEvery * 1000;
+    this.speedText = this.add.text(470, 12, '', { font: '16px monospace', color: '#80ed6a' });
+    this.speedPickup = this.add.triangle(0, 0, 0, 20, 10, 0, 20, 20, s.color).setVisible(false);
+    this.physics.add.existing(this.speedPickup);
+    this.speedPickup.body.enable = false;
+    this.physics.add.overlap(this.player, this.speedPickup, () => this.collectSpeed());
+  }
+
+  spawnSpeed() {
+    const c = COIN_DASH;
+    let x, y;
+    do {
+      x = Phaser.Math.Between(25, c.width - 25);
+      y = Phaser.Math.Between(70, c.height - 25);
+    } while (Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y) < 60);
+    this.speedPickup.setPosition(x, y).setVisible(true);
+    this.speedPickup.body.enable = true;
+    this.speedPickup.body.reset(x, y);
+    this.speedPickupUntil = this.time.now + c.powerUps.speed.lifetime * 1000;
+  }
+
+  hideSpeedPickup() {
+    this.speedPickup.setVisible(false);
+    this.speedPickup.body.enable = false;
+    this.speedNextSpawn = this.time.now + COIN_DASH.powerUps.speed.spawnEvery * 1000;
+  }
+
+  collectSpeed() {
+    if (this.finished || !this.speedPickup.visible) return;
+    this.hideSpeedPickup();
+    this.speedUntil = this.time.now + COIN_DASH.powerUps.speed.duration * 1000;
+    this.player.setFillStyle(COIN_DASH.powerUps.speed.color);
+  }
+
+  updateSpeed() {
+    const now = this.time.now;
+    if (this.speedPickup.visible && now >= this.speedPickupUntil) this.hideSpeedPickup();
+    else if (!this.speedPickup.visible && now >= this.speedNextSpawn) this.spawnSpeed();
+    if (this.speedUntil && now >= this.speedUntil) {
+      this.speedUntil = 0;
+      this.player.setFillStyle(COIN_DASH.colors.player);
+    }
+    this.speedText.setText(this.speedUntil ? `SPEED ${Math.ceil((this.speedUntil - now) / 1000)}s` : '');
+  }
+
+  playerSpeed() {
+    const s = COIN_DASH.powerUps.speed;
+    return COIN_DASH.playerSpeed * (this.time.now < this.speedUntil ? s.multiplier : 1);
   }
 
   placeCoin() {
@@ -56,8 +111,9 @@ class CoinDash extends Phaser.Scene {
       - Number(this.cursors.left.isDown || this.keys.A.isDown);
     const dy = Number(this.cursors.down.isDown || this.keys.S.isDown)
       - Number(this.cursors.up.isDown || this.keys.W.isDown);
-    const direction = new Phaser.Math.Vector2(dx, dy).normalize().scale(COIN_DASH.playerSpeed);
+    const direction = new Phaser.Math.Vector2(dx, dy).normalize().scale(this.playerSpeed());
     this.player.body.setVelocity(direction.x, direction.y);
+    this.updateSpeed();
     const seconds = Math.max(0, Math.ceil((this.deadline - this.time.now) / 1000));
     this.hud.setText(`Coins: ${this.score}                       Time: ${seconds}s`);
     if (seconds === 0) this.finish('Time is up!');
