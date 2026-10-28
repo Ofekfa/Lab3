@@ -1,29 +1,87 @@
 /* global Phaser, COIN_DASH */
 // Pixel sprites: [pixel size, ...rows]; texture sizes match the physics bodies (24, 18, 26).
 const SPRITES = {
-  player: [3, '..GGGG..', '.GGGGGG.', 'GGKGGKGG', 'GGKGGKGG', 'GGGGGGGG', 'GKGGGGKG', '.GKKKKG.', '..GGGG..'],
   coin: [3, '.YYYY.', 'YWYYYY', 'YWYOYY', 'YYYOYO', 'YYYYYO', '.OOOO.'],
   drone: [2, '..R.......R..', '...R.....R...', '..RRRRRRRRR..', '.RRRRRRRRRRR.', 'RRREERRREERRR',
     'RRREERRREERRR', 'RRRRRRRRRRRRR', 'RRRRRRRRRRRRR', '.RRR.....RRR.', '..RRRRRRRRR..',
     '..R.R...R.R..', '.R..R...R..R.', 'R..R.....R..R']
 };
+// Player characters (24x24, same hitbox): G = main colour, K = dark colour, E = eye white.
+const CHARACTER_SPRITES = {
+  blip: [3, '..GGGG..', '.GGGGGG.', 'GGKGGKGG', 'GGKGGKGG', 'GGGGGGGG', 'GKGGGGKG', '.GKKKKG.', '..GGGG..'],
+  robo: [3, '..K..K..', '.GGGGGG.', 'GGEGGEGG', 'GGKGGKGG', 'GGGGGGGG', 'GKKKKKKG', '.GGGGGG.', '.G....G.'],
+  whiskers: [3, 'G......G', 'GG....GG', 'GGGGGGGG', 'GEKGGEKG', 'GGGKKGGG', 'GGKGGKGG', '.GGGGGG.', '..GGGG..'],
+  goo: [3, '...GG...', '..GGGG..', '.GGGGGG.', 'GGEGGEGG', 'GGKGGKGG', 'GGGGGGGG', 'GGKKKKGG', 'G.GG.GG.']
+};
 const FONT = '"Courier New", Courier, monospace';
+
+function drawSprite(scene, key, [px, ...rows], pal) {
+  if (scene.textures.exists(key)) return;
+  const g = scene.make.graphics({ add: false });
+  rows.forEach((row, y) => [...row].forEach((ch, x) => {
+    if (ch in pal) g.fillStyle(pal[ch]).fillRect(x * px, y * px, px, px);
+  }));
+  g.generateTexture(key, rows[0].length * px, rows.length * px);
+  g.destroy();
+}
+
+function makeCharacterTextures(scene) {
+  COIN_DASH.characters.forEach(ch =>
+    drawSprite(scene, `player-${ch.id}`, CHARACTER_SPRITES[ch.id], { G: ch.color, K: ch.dark, E: 0xffffff }));
+}
+
+class CharacterSelect extends Phaser.Scene {
+  constructor() { super('CharacterSelect'); }
+
+  create() {
+    const c = COIN_DASH, chars = c.characters;
+    makeCharacterTextures(this);
+    this.choice = this.registry.get('character') ?? 0;
+    this.add.grid(c.width / 2, c.height / 2, c.width, c.height, 40, 40, c.colors.background, 1, c.colors.grid, 0.6);
+    this.add.text(c.width / 2, 80, 'CHOOSE YOUR CHARACTER',
+      { font: `bold 36px ${FONT}`, color: c.colors.alert }).setOrigin(0.5);
+    const gap = 180, left = c.width / 2 - gap * (chars.length - 1) / 2;
+    this.cards = chars.map((ch, i) => {
+      const x = left + i * gap, y = 250;
+      const box = this.add.rectangle(x, y, 150, 190, c.colors.panel, 0.85).setStrokeStyle(4, c.colors.grid)
+        .setInteractive({ useHandCursor: true })
+        .on('pointerover', () => this.select(i))
+        .on('pointerdown', () => { this.select(i); this.start(); });
+      this.add.image(x, y - 25, `player-${ch.id}`).setScale(3);
+      this.add.text(x, y + 60, ch.name, { font: `bold 20px ${FONT}`, color: c.colors.text }).setOrigin(0.5);
+      return box;
+    });
+    const hint = this.add.text(c.width / 2, 420, '← → TO CHOOSE · ENTER TO START',
+      { font: `bold 20px ${FONT}`, color: c.colors.hudAlt }).setOrigin(0.5);
+    this.tweens.add({ targets: hint, alpha: 0, duration: 450, yoyo: true, repeat: -1 });
+    const scan = this.add.graphics().setDepth(10).fillStyle(c.colors.scanline, 0.25);
+    for (let y = 0; y < c.height; y += 4) scan.fillRect(0, y, c.width, 2);
+    const move = d => this.select((this.choice + d + chars.length) % chars.length);
+    ['LEFT', 'A'].forEach(k => this.input.keyboard.on(`keydown-${k}`, () => move(-1)));
+    ['RIGHT', 'D'].forEach(k => this.input.keyboard.on(`keydown-${k}`, () => move(1)));
+    ['ENTER', 'SPACE'].forEach(k => this.input.keyboard.on(`keydown-${k}`, () => this.start()));
+    this.select(this.choice);
+  }
+
+  select(i) {
+    this.choice = i;
+    this.cards.forEach((box, j) => box.setStrokeStyle(4, j === i ? COIN_DASH.colors.hudLine : COIN_DASH.colors.grid));
+  }
+
+  start() {
+    this.registry.set('character', this.choice);
+    this.scene.start('CoinDash');
+  }
+}
 
 class CoinDash extends Phaser.Scene {
   constructor() { super('CoinDash'); }
 
   makeTextures() {
     const k = COIN_DASH.colors;
-    const pal = { G: k.player, K: k.playerDark, Y: k.coin, W: k.coinLight, O: k.coinShade, R: k.drone, E: k.droneEye };
-    for (const [key, [px, ...rows]] of Object.entries(SPRITES)) {
-      if (this.textures.exists(key)) continue;
-      const g = this.make.graphics({ add: false });
-      rows.forEach((row, y) => [...row].forEach((ch, x) => {
-        if (ch in pal) g.fillStyle(pal[ch]).fillRect(x * px, y * px, px, px);
-      }));
-      g.generateTexture(key, rows[0].length * px, rows.length * px);
-      g.destroy();
-    }
+    const pal = { Y: k.coin, W: k.coinLight, O: k.coinShade, R: k.drone, E: k.droneEye };
+    for (const [key, sprite] of Object.entries(SPRITES)) drawSprite(this, key, sprite, pal);
+    makeCharacterTextures(this);
   }
 
   create() {
@@ -40,7 +98,8 @@ class CoinDash extends Phaser.Scene {
     const hud = { font: `bold 20px ${FONT}`, color: c.colors.hud };
     this.hud = this.add.text(18, 12, '', hud);
     this.timer = this.add.text(c.width - 18, 12, '', { ...hud, color: c.colors.hudAlt }).setOrigin(1, 0);
-    this.player = this.physics.add.image(c.width / 2, c.height / 2, 'player');
+    const character = c.characters[this.registry.get('character') ?? 0];
+    this.player = this.physics.add.image(c.width / 2, c.height / 2, `player-${character.id}`);
     this.player.body.setCollideWorldBounds(true);
     this.coin = this.add.image(100, 100, 'coin');
     this.physics.add.existing(this.coin);
@@ -67,6 +126,7 @@ class CoinDash extends Phaser.Scene {
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D,R');
     this.input.keyboard.on('keydown-R', () => this.scene.restart());
+    this.input.keyboard.on('keydown-C', () => this.finished && this.scene.start('CharacterSelect'));
     this.createSpeed();
     this.createFreeze();
   }
@@ -269,13 +329,15 @@ class CoinDash extends Phaser.Scene {
     [this.shieldPickup, this.speedPickup, this.freezePickup, this.shieldRing].forEach(o => o.setVisible(false));
     [this.shieldText, this.speedText, this.freezeText].forEach(t => t.setText(''));
     const c = COIN_DASH, cx = c.width / 2, cy = c.height / 2;
-    this.add.rectangle(cx, cy, 472, 212, c.colors.panel, 0.92).setStrokeStyle(4, c.colors.hudLine);
-    this.add.text(cx, cy - 58, 'GAME OVER', { font: `bold 44px ${FONT}`, color: c.colors.alert }).setOrigin(0.5);
-    this.add.text(cx, cy + 4, `${reason}\nSCORE ${String(this.score).padStart(4, '0')}`,
+    this.add.rectangle(cx, cy, 472, 244, c.colors.panel, 0.92).setStrokeStyle(4, c.colors.hudLine);
+    this.add.text(cx, cy - 70, 'GAME OVER', { font: `bold 44px ${FONT}`, color: c.colors.alert }).setOrigin(0.5);
+    this.add.text(cx, cy - 8, `${reason}\nSCORE ${String(this.score).padStart(4, '0')}`,
       { font: `bold 22px ${FONT}`, color: c.colors.text, align: 'center', lineSpacing: 8 }).setOrigin(0.5);
-    const retry = this.add.text(cx, cy + 70, 'PRESS R TO PLAY AGAIN',
+    const retry = this.add.text(cx, cy + 58, 'PRESS R TO PLAY AGAIN',
       { font: `bold 20px ${FONT}`, color: c.colors.hudAlt }).setOrigin(0.5);
     this.tweens.add({ targets: retry, alpha: 0, duration: 450, yoyo: true, repeat: -1 });
+    this.add.text(cx, cy + 90, 'PRESS C TO CHANGE CHARACTER',
+      { font: `bold 16px ${FONT}`, color: c.colors.text }).setOrigin(0.5);
   }
 }
 window.coinDashGame = new Phaser.Game({
@@ -287,5 +349,5 @@ window.coinDashGame = new Phaser.Game({
   pixelArt: true,
   physics: { default: 'arcade', arcade: { debug: false } },
   scale: { mode: Phaser.Scale.FIT, autoCenter: Phaser.Scale.CENTER_HORIZONTALLY },
-  scene: CoinDash
+  scene: [CharacterSelect, CoinDash]
 });
