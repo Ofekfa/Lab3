@@ -40,6 +40,9 @@ class CoinDash extends Phaser.Scene {
     const hud = { font: `bold 20px ${FONT}`, color: c.colors.hud };
     this.hud = this.add.text(18, 12, '', hud);
     this.timer = this.add.text(c.width - 18, 12, '', { ...hud, color: c.colors.hudAlt }).setOrigin(1, 0);
+    this.highScore = this.loadHighScore();
+    this.best = this.add.text(c.width - 120, 12, `HI ${String(this.highScore).padStart(4, '0')}`,
+      { ...hud, color: c.colors.text }).setOrigin(1, 0);
     this.player = this.physics.add.image(c.width / 2, c.height / 2, 'player');
     this.player.body.setCollideWorldBounds(true);
     this.coin = this.add.image(100, 100, 'coin');
@@ -281,6 +284,19 @@ class CoinDash extends Phaser.Scene {
     this.freezeText.setText(this.freezeSaved ? `FREEZE ${Math.ceil((this.freezeUntil - now) / 1000)}s` : '');
   }
 
+  loadHighScore() {
+    // Storage can be unavailable (private windows, some file:// setups); fall back to 0.
+    try { return Number(localStorage.getItem('coinDash.highScore')) || 0; } catch { return 0; }
+  }
+
+  saveHighScore() {
+    if (this.score <= this.highScore) return false;
+    this.highScore = this.score;
+    this.best.setText(`HI ${String(this.highScore).padStart(4, '0')}`);
+    try { localStorage.setItem('coinDash.highScore', String(this.highScore)); } catch { /* not persisted */ }
+    return true;
+  }
+
   finish(reason) {
     if (this.finished) return;
     this.finished = true;
@@ -289,11 +305,12 @@ class CoinDash extends Phaser.Scene {
     [this.shieldPickup, this.speedPickup, this.freezePickup, this.shieldRing].forEach(o => o.setVisible(false));
     [this.shieldText, this.speedText, this.freezeText].forEach(t => t.setText(''));
     const c = COIN_DASH, cx = c.width / 2, cy = c.height / 2;
-    this.add.rectangle(cx, cy, 472, 212, c.colors.panel, 0.92).setStrokeStyle(4, c.colors.hudLine);
-    this.add.text(cx, cy - 58, 'GAME OVER', { font: `bold 44px ${FONT}`, color: c.colors.alert }).setOrigin(0.5);
-    this.add.text(cx, cy + 4, `${reason}\nSCORE ${String(this.score).padStart(4, '0')}`,
+    const best = this.saveHighScore() ? 'NEW HIGH SCORE!' : `HI ${String(this.highScore).padStart(4, '0')}`;
+    this.add.rectangle(cx, cy, 472, 240, c.colors.panel, 0.92).setStrokeStyle(4, c.colors.hudLine);
+    this.add.text(cx, cy - 72, 'GAME OVER', { font: `bold 44px ${FONT}`, color: c.colors.alert }).setOrigin(0.5);
+    this.add.text(cx, cy + 4, `${reason}\nSCORE ${String(this.score).padStart(4, '0')}\n${best}`,
       { font: `bold 22px ${FONT}`, color: c.colors.text, align: 'center', lineSpacing: 8 }).setOrigin(0.5);
-    const retry = this.add.text(cx, cy + 70, 'PRESS R TO PLAY AGAIN',
+    const retry = this.add.text(cx, cy + 84, 'PRESS R TO PLAY AGAIN',
       { font: `bold 20px ${FONT}`, color: c.colors.hudAlt }).setOrigin(0.5);
     this.tweens.add({ targets: retry, alpha: 0, duration: 450, yoyo: true, repeat: -1 });
   }
