@@ -2,6 +2,8 @@
 
 Collect coins, avoid drones, and survive a 45-second round. Move with arrow keys or WASD;
 press R to restart. This is deliberately small so you can add features during the lab.
+Before each round, choose one of four characters (BLIP, ROBO, WHISKERS, GOO) with the arrow keys and
+Enter, or by clicking; R replays with the same character and C on the game-over screen picks again.
 Grab the cyan diamond for a 6-second shield that makes you immune to drones.
 Grab the green triangle power-up for a 5-second speed boost (x1.7).
 Grab the ice-blue star power-up to freeze all drones for 4 seconds (touching a frozen drone still ends the round).
