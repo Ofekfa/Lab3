@@ -233,6 +233,9 @@ class CoinDash extends Phaser.Scene {
     if (this.finished) return;
     this.finished = true;
     this.physics.pause();
+    // Power-up pickups and timers would otherwise stay frozen on top of the end screen.
+    [this.shieldPickup, this.speedPickup, this.freezePickup, this.shieldRing].forEach(o => o.setVisible(false));
+    [this.shieldText, this.speedText, this.freezeText].forEach(t => t.setText(''));
     const c = COIN_DASH;
     this.add.rectangle(c.width / 2, c.height / 2, 460, 150, 0x0a1120, 0.95);
     this.add.text(c.width / 2, c.height / 2,
