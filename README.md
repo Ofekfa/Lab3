@@ -15,6 +15,7 @@ Grab the ice-blue star power-up to freeze all drones for 4 seconds (touching a f
 Collecting a coin plays a short chime, synthesized with the Web Audio API.
 Pickups burst into pixel sparks with a light screen shake, and the chime climbs a musical scale while your coin streak lasts (a drone hit flashes red and resets it).
 The best of those scores is shown as HI in the top bar.
+Active power-ups show shrinking timer bars above the player, and a small bar under the combo shows how long it lasts.
 
 **Play it here:** https://www.avivz.net/coin-dash/
 

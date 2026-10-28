@@ -143,6 +143,34 @@ class CoinDash extends Phaser.Scene {
     this.createFreeze();
     this.createGolden();
     this.createJuice();
+    this.powerBars = this.add.graphics().setDepth(5);
+    this.comboBar = this.add.graphics();
+  }
+
+  updateComboBar() {
+    // Shrinking bar under the HUD's xN showing how long the combo window has left.
+    const left = this.lastCoinAt + COIN_DASH.combo.window * 1000 - this.time.now;
+    this.comboBar.clear();
+    if (!this.comboActive()) return;
+    const w = 24, x = this.hud.x + this.hud.width - w;
+    this.comboBar.fillStyle(COIN_DASH.colors.drone).fillRect(x, 36, w * left / (COIN_DASH.combo.window * 1000), 3);
+  }
+
+  updatePowerBars() {
+    // One bar per active power-up above the player, shrinking as its time runs out.
+    const p = COIN_DASH.powerUps, now = this.time.now;
+    const active = [
+      [this.shieldUntil, p.shield],
+      [this.speedUntil, p.speed],
+      [this.freezeSaved && this.freezeUntil, p.freeze]
+    ].filter(([until]) => until > now);
+    const w = 30, h = 4, x = this.player.x - w / 2;
+    this.powerBars.clear();
+    active.forEach(([until, s], i) => {
+      const y = this.player.y - 22 - i * (h + 2);
+      this.powerBars.fillStyle(COIN_DASH.colors.panel, 0.7).fillRect(x - 1, y - 1, w + 2, h + 2);
+      this.powerBars.fillStyle(s.color).fillRect(x, y, w * (until - now) / (s.duration * 1000), h);
+    });
   }
 
   addDrone(x, y, angle) {
@@ -402,6 +430,8 @@ class CoinDash extends Phaser.Scene {
     this.timer.setText(`TIME ${String(seconds).padStart(2, '0')}`);
     if (seconds === 0) this.finish('TIME IS UP!');
     this.updateShield();
+    this.updateComboBar();
+    this.updatePowerBars();
   }
 
   createShield() {
@@ -535,6 +565,7 @@ class CoinDash extends Phaser.Scene {
     // Power-up pickups and timers would otherwise stay frozen on top of the end screen.
     [this.shieldPickup, this.speedPickup, this.freezePickup, this.shieldRing, this.golden].forEach(o => o.setVisible(false));
     [this.shieldText, this.speedText, this.freezeText].forEach(t => t.setText(''));
+    [this.powerBars, this.comboBar].forEach(g => g.clear());
     const { scores, entry, isNew } = this.saveHighScore();
     const c = COIN_DASH, cx = c.width / 2, cy = (c.height + 44) / 2;
     const style = (size, color) => ({ font: `bold ${size}px ${FONT}`, color });
