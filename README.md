@@ -5,6 +5,7 @@ press R to restart. This is deliberately small so you can add features during th
 Grab the cyan diamond for a 6-second shield that makes you immune to drones.
 Grab the green triangle power-up for a 5-second speed boost (x1.7).
 Grab the ice-blue star power-up to freeze all drones for 4 seconds (touching a frozen drone still ends the round).
+Your best score is saved in the browser and shown as HI in the top bar; beat it to see NEW HIGH SCORE! on the end screen.
 
 **Play it here:** https://www.avivz.net/coin-dash/
 
