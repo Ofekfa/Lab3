@@ -17,6 +17,10 @@ window.COIN_DASH = {
   // Game-feel feedback: chime climbs a major scale while a coin streak lasts; kept moderate on purpose.
   juice: { pitchSteps: [0, 2, 4, 5, 7, 9, 11, 12], sparks: 10, goldenSparks: 24, sparkSpeed: 160,
     shake: 0.003, shakeMs: 80, hitShake: 0.012, hitShakeMs: 220, punch: 1.3 },
+  sfxVolume: 0.15,
+  musicVolume: 0.05,
+  musicBpm: 140,
+  countdownSeconds: 5,
   colors: {
     background: 0x07071a, grid: 0x1c1c4a, hudLine: 0x3cff3c, scanline: 0x000000, panel: 0x000000,
     coin: 0xffd800, coinLight: 0xffffff, coinShade: 0xd86a00,
