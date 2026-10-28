@@ -89,6 +89,13 @@ class CoinDash extends Phaser.Scene {
     this.makeTextures();
     this.score = 0;
     this.finished = false;
+    this.lives = c.lives;
+    this.invulnerableUntil = 0;
+    this.combo = 0;
+    this.lastCoinAt = -Infinity;
+    this.coinsCollected = 0;
+    this.level = 1;
+    this.droneSpeed = c.droneSpeed;
     this.deadline = this.time.now + c.roundSeconds * 1000;
     this.physics.world.setBounds(0, 44, c.width, c.height - 44);
     this.add.grid(c.width / 2, c.height / 2, c.width, c.height, 40, 40,
@@ -98,8 +105,9 @@ class CoinDash extends Phaser.Scene {
     const hud = { font: `bold 20px ${FONT}`, color: c.colors.hud };
     this.hud = this.add.text(18, 12, '', hud);
     this.timer = this.add.text(c.width - 18, 12, '', { ...hud, color: c.colors.hudAlt }).setOrigin(1, 0);
-    const character = c.characters[this.registry.get('character') ?? 0];
-    this.player = this.physics.add.image(c.width / 2, c.height / 2, `player-${character.id}`);
+    this.livesText = this.add.text(c.width - 120, 12, '♥'.repeat(this.lives), { ...hud, color: c.colors.alert }).setOrigin(1, 0);
+    this.character = c.characters[this.registry.get('character') ?? 0];
+    this.player = this.physics.add.image(c.width / 2, c.height / 2, `player-${this.character.id}`);
     this.player.body.setCollideWorldBounds(true);
     this.coin = this.add.image(100, 100, 'coin');
     this.physics.add.existing(this.coin);
@@ -107,28 +115,127 @@ class CoinDash extends Phaser.Scene {
     this.tweens.add({ targets: this.coin, alpha: 0.55, duration: 200, yoyo: true, repeat: -1, hold: 300 });
     this.placeCoin();
     this.drones = this.physics.add.group();
-    for (let i = 0; i < c.droneCount; i++) {
-      const drone = this.add.image(90 + i * 270, 100, 'drone');
-      this.drones.add(drone);
-      drone.body.setCollideWorldBounds(true).setBounce(1, 1);
-      const angle = (35 + i * 105) * Math.PI / 180;
-      drone.body.setVelocity(Math.cos(angle) * c.droneSpeed, Math.sin(angle) * c.droneSpeed);
-    }
+    for (let i = 0; i < c.droneCount; i++) this.addDrone(90 + i * 270, 100, (35 + i * 105) * Math.PI / 180);
     const scan = this.add.graphics().setDepth(10).fillStyle(c.colors.scanline, 0.25);
     for (let y = 0; y < c.height; y += 4) scan.fillRect(0, y, c.width, 2);
-    this.physics.add.overlap(this.player, this.coin, () => {
-      if (this.finished) return;
-      this.score++;
-      this.placeCoin();
-    });
+    this.physics.add.overlap(this.player, this.coin, () => this.collectCoin());
     this.createShield();
-    this.physics.add.overlap(this.player, this.drones, () => this.shieldActive() || this.finish('A DRONE CAUGHT YOU!'));
+    this.physics.add.overlap(this.player, this.drones, () => this.hitPlayer());
     this.cursors = this.input.keyboard.createCursorKeys();
     this.keys = this.input.keyboard.addKeys('W,A,S,D,R');
     this.input.keyboard.on('keydown-R', () => this.scene.restart());
     this.input.keyboard.on('keydown-C', () => this.finished && this.scene.start('CharacterSelect'));
     this.createSpeed();
     this.createFreeze();
+    this.createGolden();
+  }
+
+  addDrone(x, y, angle) {
+    const drone = this.add.image(x, y, 'drone');
+    this.drones.add(drone);
+    drone.body.setCollideWorldBounds(true).setBounce(1, 1);
+    drone.body.setVelocity(Math.cos(angle) * this.droneSpeed, Math.sin(angle) * this.droneSpeed);
+    return drone;
+  }
+
+  randomSpot() {
+    const c = COIN_DASH;
+    let x, y;
+    do {
+      x = Phaser.Math.Between(25, c.width - 25);
+      y = Phaser.Math.Between(70, c.height - 25);
+    } while (Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y) < 60);
+    return { x, y };
+  }
+
+  popup(x, y, text, color, size = 18) {
+    const t = this.add.text(x, y, text, { font: `bold ${size}px ${FONT}`, color }).setOrigin(0.5).setDepth(5);
+    this.tweens.add({ targets: t, y: y - 30, alpha: 0, duration: 800, onComplete: () => t.destroy() });
+  }
+
+  collectCoin() {
+    if (this.finished) return;
+    const c = COIN_DASH, now = this.time.now;
+    // Coins grabbed in quick succession build a multiplier; a pause resets it.
+    this.combo = now - this.lastCoinAt <= c.combo.window * 1000 ? Math.min(this.combo + 1, c.combo.max) : 1;
+    this.lastCoinAt = now;
+    this.score += this.combo;
+    this.popup(this.coin.x, this.coin.y, `+${this.combo}`, c.colors.hudAlt);
+    this.coinsCollected++;
+    if (this.coinsCollected % c.difficulty.coinsPerLevel === 0) this.levelUp();
+    this.placeCoin();
+  }
+
+  comboActive() { return this.time.now - this.lastCoinAt <= COIN_DASH.combo.window * 1000 && this.combo > 1; }
+
+  levelUp() {
+    const c = COIN_DASH, d = c.difficulty;
+    this.level++;
+    this.droneSpeed *= d.speedUp;
+    this.drones.getChildren().forEach(drone => drone.body.velocity.scale(d.speedUp));
+    if (this.freezeSaved) this.freezeSaved.forEach(s => { s.vx *= d.speedUp; s.vy *= d.speedUp; });
+    if (this.drones.getLength() < d.maxDrones) {
+      // Enter from the corner farthest from the player.
+      const x = this.player.x < c.width / 2 ? c.width - 40 : 40;
+      const y = this.player.y < (c.height + 44) / 2 ? c.height - 40 : 84;
+      const drone = this.addDrone(x, y, Phaser.Math.FloatBetween(0, Math.PI * 2));
+      if (this.freezeSaved) {
+        this.freezeSaved.push({ drone, vx: drone.body.velocity.x, vy: drone.body.velocity.y });
+        drone.body.setVelocity(0, 0);
+        drone.setTint(c.powerUps.freeze.color);
+      }
+    }
+    this.popup(c.width / 2, c.height / 2, `LEVEL ${this.level}`, c.colors.alert, 40);
+  }
+
+  hitPlayer() {
+    const now = this.time.now;
+    if (this.finished || this.shieldActive() || now < this.invulnerableUntil) return;
+    this.lives--;
+    this.livesText.setText('♥'.repeat(this.lives));
+    if (this.lives <= 0) return this.finish('A DRONE CAUGHT YOU!');
+    this.invulnerableUntil = now + COIN_DASH.hitInvulnerable * 1000;
+    this.tweens.add({ targets: this.player, alpha: 0.2, duration: 100, yoyo: true,
+      repeat: Math.floor(COIN_DASH.hitInvulnerable * 5) - 1, onComplete: () => this.player.setAlpha(1) });
+  }
+
+  createGolden() {
+    this.goldenUntil = 0;
+    this.nextGoldenAt = this.time.now + COIN_DASH.goldenCoin.spawnEvery * 1000;
+    this.golden = this.add.image(0, 0, 'coin').setScale(1.7).setVisible(false);
+    this.physics.add.existing(this.golden);
+    this.golden.body.setCircle(9);
+    this.golden.body.enable = false;
+    this.tweens.add({ targets: this.golden, alpha: 0.3, duration: 120, yoyo: true, repeat: -1 });
+    this.physics.add.overlap(this.player, this.golden, () => this.collectGolden());
+  }
+
+  spawnGolden() {
+    const { x, y } = this.randomSpot();
+    this.golden.setPosition(x, y).setVisible(true);
+    this.golden.body.enable = true;
+    this.golden.body.reset(x, y);
+    this.goldenUntil = this.time.now + COIN_DASH.goldenCoin.lifetime * 1000;
+  }
+
+  hideGolden() {
+    this.golden.setVisible(false);
+    this.golden.body.enable = false;
+    this.nextGoldenAt = this.time.now + COIN_DASH.goldenCoin.spawnEvery * 1000;
+  }
+
+  collectGolden() {
+    if (this.finished || !this.golden.visible) return;
+    const value = COIN_DASH.goldenCoin.value;
+    this.score += value;
+    this.popup(this.golden.x, this.golden.y, `+${value}`, COIN_DASH.colors.hudAlt, 24);
+    this.hideGolden();
+  }
+
+  updateGolden() {
+    const now = this.time.now;
+    if (this.golden.visible && now >= this.goldenUntil) this.hideGolden();
+    else if (!this.golden.visible && now >= this.nextGoldenAt) this.spawnGolden();
   }
 
   createSpeed() {
@@ -207,8 +314,9 @@ class CoinDash extends Phaser.Scene {
     this.player.body.setVelocity(direction.x, direction.y);
     this.updateSpeed();
     this.updateFreeze();
+    this.updateGolden();
     const seconds = Math.max(0, Math.ceil((this.deadline - this.time.now) / 1000));
-    this.hud.setText(`SCORE ${String(this.score).padStart(4, '0')}`);
+    this.hud.setText(`SCORE ${String(this.score).padStart(4, '0')}${this.comboActive() ? ` x${this.combo}` : ''}`);
     this.timer.setText(`TIME ${String(seconds).padStart(2, '0')}`);
     if (seconds === 0) this.finish('TIME IS UP!');
     this.updateShield();
@@ -321,23 +429,42 @@ class CoinDash extends Phaser.Scene {
     this.freezeText.setText(this.freezeSaved ? `FREEZE ${Math.ceil((this.freezeUntil - now) / 1000)}s` : '');
   }
 
+  saveHighScore() {
+    const c = COIN_DASH, entry = { score: this.score, name: this.character.name };
+    let scores = [];
+    // Storage can be unavailable (private windows, blocked site data); the table then lasts one round.
+    try { scores = JSON.parse(localStorage.getItem(c.highScoreKey)) || []; } catch (e) { scores = []; }
+    const isNew = this.score > 0 && this.score > (scores[0]?.score ?? 0);
+    scores = [...scores, entry].sort((a, b) => b.score - a.score).slice(0, c.highScoreCount);
+    try { localStorage.setItem(c.highScoreKey, JSON.stringify(scores)); } catch (e) { /* not saved */ }
+    return { scores, entry, isNew };
+  }
+
   finish(reason) {
     if (this.finished) return;
     this.finished = true;
     this.physics.pause();
     // Power-up pickups and timers would otherwise stay frozen on top of the end screen.
-    [this.shieldPickup, this.speedPickup, this.freezePickup, this.shieldRing].forEach(o => o.setVisible(false));
+    [this.shieldPickup, this.speedPickup, this.freezePickup, this.shieldRing, this.golden].forEach(o => o.setVisible(false));
     [this.shieldText, this.speedText, this.freezeText].forEach(t => t.setText(''));
-    const c = COIN_DASH, cx = c.width / 2, cy = c.height / 2;
-    this.add.rectangle(cx, cy, 472, 244, c.colors.panel, 0.92).setStrokeStyle(4, c.colors.hudLine);
-    this.add.text(cx, cy - 70, 'GAME OVER', { font: `bold 44px ${FONT}`, color: c.colors.alert }).setOrigin(0.5);
-    this.add.text(cx, cy - 8, `${reason}\nSCORE ${String(this.score).padStart(4, '0')}`,
-      { font: `bold 22px ${FONT}`, color: c.colors.text, align: 'center', lineSpacing: 8 }).setOrigin(0.5);
-    const retry = this.add.text(cx, cy + 58, 'PRESS R TO PLAY AGAIN',
-      { font: `bold 20px ${FONT}`, color: c.colors.hudAlt }).setOrigin(0.5);
+    const { scores, entry, isNew } = this.saveHighScore();
+    const c = COIN_DASH, cx = c.width / 2, cy = (c.height + 44) / 2;
+    const style = (size, color) => ({ font: `bold ${size}px ${FONT}`, color });
+    this.add.rectangle(cx, cy - 10, 480, 400, c.colors.panel, 0.92).setStrokeStyle(4, c.colors.hudLine);
+    this.add.text(cx, cy - 180, 'GAME OVER', style(40, c.colors.alert)).setOrigin(0.5);
+    this.add.text(cx, cy - 136, reason, style(20, c.colors.text)).setOrigin(0.5);
+    this.add.text(cx, cy - 110, `SCORE ${String(this.score).padStart(4, '0')}`, style(20, c.colors.text)).setOrigin(0.5);
+    if (isNew) {
+      const banner = this.add.text(cx, cy - 80, 'NEW HIGH SCORE!', style(20, c.colors.hudAlt)).setOrigin(0.5);
+      this.tweens.add({ targets: banner, scale: 1.15, duration: 300, yoyo: true, repeat: -1 });
+    }
+    this.add.text(cx, cy - 46, 'HIGH SCORES', style(16, c.colors.hud)).setOrigin(0.5);
+    scores.forEach((s, i) => this.add.text(cx, cy - 20 + i * 24,
+      `${i + 1}. ${String(s.score).padStart(4, '0')}  ${s.name.padEnd(8)}`,
+      style(18, s === entry ? c.colors.hudAlt : c.colors.text)).setOrigin(0.5));
+    const retry = this.add.text(cx, cy + 128, 'PRESS R TO PLAY AGAIN', style(20, c.colors.hudAlt)).setOrigin(0.5);
     this.tweens.add({ targets: retry, alpha: 0, duration: 450, yoyo: true, repeat: -1 });
-    this.add.text(cx, cy + 90, 'PRESS C TO CHANGE CHARACTER',
-      { font: `bold 16px ${FONT}`, color: c.colors.text }).setOrigin(0.5);
+    this.add.text(cx, cy + 162, 'PRESS C TO CHANGE CHARACTER', style(16, c.colors.text)).setOrigin(0.5);
   }
 }
 window.coinDashGame = new Phaser.Game({
