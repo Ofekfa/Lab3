@@ -49,3 +49,10 @@ https://docs.phaser.io/phaser/getting-started/making-your-first-phaser-game
 
 - Ofek (Ofekfa)
 - David (olidortd)
+
+## Lab session
+
+Use this window on both laptops for the lab report.
+
+- Start: 2026-10-28 10:10 Israel Standard Time (`2026-10-28T10:10:00+02:00`, `08:10Z`)
+- End: 2026-10-28 11:40 Israel Standard Time (`2026-10-28T11:40:00+02:00`, `09:40Z`)
