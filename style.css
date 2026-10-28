@@ -1,7 +1,11 @@
 * { box-sizing: border-box; }
-body { margin: 0; background: #0a1120; color: #e5edf7; font: 17px/1.5 system-ui, sans-serif; }
-main { max-width: 850px; margin: 30px auto; padding: 0 20px; }
-header > p:first-child { color: #71e8ce; font-size: 12px; letter-spacing: .15em; }
-h1 { margin: 0; font-size: 40px; }
-#game { border: 1px solid #34445e; border-radius: 12px; overflow: hidden; }
-canvas { display: block; }
+body { margin: 0; background: #000 repeating-linear-gradient(0deg, #0000 0 3px, #ffffff08 3px 4px);
+  color: #3cff3c; font: bold 16px/1.5 "Courier New", Courier, monospace; text-transform: uppercase; }
+main { max-width: 880px; margin: 24px auto; padding: 20px; background: #12122e;
+  border: 6px solid #ff3c6e; box-shadow: 0 0 0 6px #000, 0 0 0 10px #ffd800; text-align: center; }
+header > p:first-child { color: #ffd800; font-size: 13px; letter-spacing: .3em; margin: 0 0 4px; }
+h1 { margin: 0; font-size: 48px; letter-spacing: .12em; color: #ff3c6e; text-shadow: 4px 4px 0 #ffd800, 8px 8px 0 #000; }
+header > p:last-child { color: #fff; font-size: 14px; }
+#game { border: 4px solid #3cff3c; box-shadow: 0 0 24px #3cff3c55, inset 0 0 0 4px #000; background: #000; overflow: hidden; }
+canvas { display: block; image-rendering: pixelated; }
+strong { color: #ffd800; }

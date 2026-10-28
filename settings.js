@@ -6,7 +6,13 @@ window.COIN_DASH = {
   playerSpeed: 240,
   droneSpeed: 105,
   droneCount: 3,
-  colors: { background: 0x101c31, player: 0x71e8ce, coin: 0xffd166, drone: 0xff657a },
+  colors: {
+    background: 0x07071a, grid: 0x1c1c4a, hudLine: 0x3cff3c, scanline: 0x000000, panel: 0x000000,
+    player: 0x3cff3c, playerDark: 0x0a5a0a,
+    coin: 0xffd800, coinLight: 0xffffff, coinShade: 0xd86a00,
+    drone: 0xff3c6e, droneEye: 0xffffff,
+    hud: '#3cff3c', hudAlt: '#ffd800', alert: '#ff3c6e', text: '#ffffff'
+  },
   powerUps: {
     shield: { color: 0x4cc9f0, duration: 6, spawnEvery: 10, lifetime: 7 },
     speed: { color: 0x80ed6a, duration: 5, multiplier: 1.7, spawnEvery: 10, lifetime: 7 },
