@@ -60,6 +60,7 @@ class CoinDash extends Phaser.Scene {
     this.physics.add.overlap(this.player, this.coin, () => {
       if (this.finished) return;
       this.score++;
+      this.playCoinSound();
       this.placeCoin();
     });
     this.createShield();
@@ -123,6 +124,25 @@ class CoinDash extends Phaser.Scene {
   playerSpeed() {
     const s = COIN_DASH.powerUps.speed;
     return COIN_DASH.playerSpeed * (this.time.now < this.speedUntil ? s.multiplier : 1);
+  }
+
+  playCoinSound() {
+    // Synthesized two-note chime, so the game still ships without audio assets.
+    const ctx = this.sound.context;
+    if (!ctx) return;
+    const t = ctx.currentTime;
+    const gain = ctx.createGain();
+    gain.gain.setValueAtTime(0.0001, t);
+    gain.gain.exponentialRampToValueAtTime(COIN_DASH.coinSoundVolume, t + 0.01);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t + 0.25);
+    gain.connect(ctx.destination);
+    const osc = ctx.createOscillator();
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(988, t);
+    osc.frequency.setValueAtTime(1319, t + 0.07);
+    osc.connect(gain);
+    osc.start(t);
+    osc.stop(t + 0.25);
   }
 
   placeCoin() {
