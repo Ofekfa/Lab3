@@ -15,6 +15,7 @@ Grab the ice-blue star power-up to freeze all drones for 4 seconds (touching a f
 Sound is synthesized with the Web Audio API: a background music loop during the round, a chime for each coin,
 a sound for each power-up, a hit sound when you lose a life, a death sound on the last one, and a beep each
 second in the last 5 seconds.
+Pickups burst into pixel sparks with a light screen shake, and the chime climbs a musical scale while your coin streak lasts (a drone hit flashes red and resets it).
 The best of those scores is shown as HI in the top bar.
 
 **Play it here:** https://www.avivz.net/coin-dash/

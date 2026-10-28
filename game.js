@@ -151,6 +151,7 @@ class CoinDash extends Phaser.Scene {
     this.createSpeed();
     this.createFreeze();
     this.createGolden();
+    this.createJuice();
     this.startMusic();
     this.events.once('shutdown', () => this.stopMusic());
   }
@@ -183,9 +184,10 @@ class CoinDash extends Phaser.Scene {
     const c = COIN_DASH, now = this.time.now;
     // Coins grabbed in quick succession build a multiplier; a longer gap resets it.
     this.combo = now - this.lastCoinAt <= c.combo.window * 1000 ? Math.min(this.combo + 1, c.combo.max) : 1;
+    this.streak = this.combo === 1 ? 1 : this.streak + 1;
     this.lastCoinAt = now;
     this.score += this.combo;
-    this.playCoinSound();
+    this.juiceCoin(this.coin.x, this.coin.y, c.juice.sparks, c.colors.coin);
     this.popup(this.coin.x, this.coin.y, `+${this.combo}`, c.colors.hudAlt);
     this.coinsCollected++;
     if (this.coinsCollected % c.difficulty.coinsPerLevel === 0) this.levelUp();
@@ -219,6 +221,7 @@ class CoinDash extends Phaser.Scene {
     if (this.finished || this.shieldActive() || now < this.invulnerableUntil) return;
     this.lives--;
     this.livesText.setText('♥'.repeat(this.lives));
+    this.juiceHit();
     if (this.lives <= 0) {
       this.synth({ type: 'sawtooth', steps: [[0, 494], [0.1, 370], [0.2, 294]], slide: 60, length: 0.8 });
       return this.finish('A DRONE CAUGHT YOU!');
@@ -258,6 +261,7 @@ class CoinDash extends Phaser.Scene {
     if (this.finished || !this.golden.visible) return;
     const value = COIN_DASH.goldenCoin.value;
     this.score += value;
+    this.juiceCoin(this.golden.x, this.golden.y, COIN_DASH.juice.goldenSparks, COIN_DASH.colors.coinLight, 12);
     this.popup(this.golden.x, this.golden.y, `+${value}`, COIN_DASH.colors.hudAlt, 24);
     this.hideGolden();
   }
@@ -323,6 +327,30 @@ class CoinDash extends Phaser.Scene {
     return COIN_DASH.playerSpeed * (this.time.now < this.speedUntil ? s.multiplier : 1);
   }
 
+  createJuice() {
+    this.streak = 0;
+    if (!this.textures.exists('spark')) this.make.graphics({ add: false }).fillStyle(0xffffff).fillRect(0, 0, 4, 4)
+      .generateTexture('spark', 4, 4).destroy();
+    const j = COIN_DASH.juice;
+    this.sparks = this.add.particles(0, 0, 'spark', { emitting: false, lifespan: 420, gravityY: 300,
+      speed: { min: j.sparkSpeed * 0.4, max: j.sparkSpeed }, scale: { start: 1.5, end: 0 } }).setDepth(6);
+  }
+
+  // Coin pickup feedback: a pixel burst, a light shake, a squash on the player and a chime that rises with the streak.
+  juiceCoin(x, y, count, tint, extraSteps = 0) {
+    const j = COIN_DASH.juice, steps = j.pitchSteps;
+    this.sparks.setParticleTint(tint).explode(count, x, y);
+    this.cameras.main.shake(j.shakeMs, j.shake * Math.min(this.streak || 1, 4));
+    this.tweens.add({ targets: this.player, scale: j.punch, duration: 60, yoyo: true, onComplete: () => this.player.setScale(1) });
+    this.playCoinSound(steps[Math.min(Math.max(this.streak, 1) - 1, steps.length - 1)] + extraSteps);
+  }
+
+  juiceHit() {
+    const j = COIN_DASH.juice;
+    this.cameras.main.shake(j.hitShakeMs, j.hitShake).flash(150, 255, 60, 110);
+    this.streak = 0;
+  }
+
   // All sounds are synthesized, so the game still ships without audio assets. One oscillator under a
   // decaying envelope: steps are [offset s, Hz], and slide glides from the last step to that Hz.
   synth({ type = 'square', steps, length, slide, volume = COIN_DASH.sfxVolume, at, out }) {
@@ -343,8 +371,9 @@ class CoinDash extends Phaser.Scene {
     osc.stop(t + length);
   }
 
-  playCoinSound() {
-    this.synth({ steps: [[0, 988], [0.07, 1319]], length: 0.25, volume: COIN_DASH.coinSoundVolume });
+  playCoinSound(semitones = 0) {
+    const k = 2 ** (semitones / 12);
+    this.synth({ steps: [[0, 988 * k], [0.07, 1319 * k]], length: 0.25, volume: COIN_DASH.coinSoundVolume });
   }
 
   playCountdownBeep(seconds) {
@@ -392,12 +421,14 @@ class CoinDash extends Phaser.Scene {
       this.pausedAt = this.time.now;
       this.physics.pause();
       this.tweens.pauseAll();
+      this.sparks.pause();
     } else {
       // time.now keeps running while paused, so push every timestamp-based timer back by the pause.
       const d = this.time.now - this.pausedAt;
       for (const k of PAUSABLE_TIMERS) if (Number.isFinite(this[k]) && this[k] > 0) this[k] += d;
       this.physics.resume();
       this.tweens.resumeAll();
+      this.sparks.resume();
     }
     this.pauseText.setVisible(this.paused);
   }
